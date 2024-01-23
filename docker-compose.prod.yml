@@ -1,0 +1,141 @@
+version: "3.9"
+
+services:
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:5173"
+    volumes:
+      - ./frontend:/frontend
+      - /frontend/node_modules
+    command: [ 'yarn', 'dev' ]
+    tty: true
+    stdin_open: true
+    restart: always
+    networks:
+      - teamd
+
+  database:
+    container_name: database
+    image: mysql:8.0
+    env_file:
+      - ./backend/.env
+    ports:
+      - "3306:3306"
+    networks:
+      - teamd
+
+  backend:
+    container_name: backend
+    env_file:
+      - ./backend/.env
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/backend
+    command: sh -c "
+      python manage.py makemigrations user && 
+      python manage.py makemigrations canvas &&
+      python manage.py makemigrations component &&
+      python manage.py migrate && 
+      python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    expose:
+      - 8000
+    depends_on:
+      - database
+    tty: true
+    networks:
+      - teamd
+
+  redis:
+    container_name: redis
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+    networks:
+      - teamd
+
+  rabbitmq:
+    # hostname: rabbitmq 호스트 설정
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    command: rabbitmq-server
+    env_file:
+      - ./backend/.env # rabbitmq 설정 필요
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./backend:/backend
+    depends_on:
+      - backend
+    networks:
+      - teamd
+
+  celert_worker:
+    container_name: celery_worker
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: "celery -A backend.celery worker --loglevel=info --pool=solo"
+    depends_on:
+      - backend
+      - rabbitmq
+    volumes:
+      - ./backend:/backend
+    networks:
+      - teamd
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - backend
+    networks:
+      - teamd
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - backend
+    networks:
+      - teamd
+
+  node_exporter:
+    container_name: node-exporter
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/:/rootfs:ro"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points'
+      - '^/(sys|proc|dev|host|etc)($|/)'
+    networks:
+      - teamd
+
+networks:
+  teamd:
+    driver: bridge
