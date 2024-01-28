@@ -3,6 +3,8 @@ version: "3.9"
 services:
   frontend:
     container_name: frontend
+    env_file:
+      - ./frontend/.env
     build:
       context: ./frontend
       dockerfile: Dockerfile
