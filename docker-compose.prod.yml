@@ -42,9 +42,6 @@ services:
       - ./backend:/backend
       - ./backend/static/:/backend/static/
     command: sh -c "sleep 10 &&
-      python manage.py makemigrations user &&
-      python manage.py makemigrations canvas &&
-      python manage.py makemigrations component &&
       python manage.py migrate &&
       gunicorn backend.wsgi --preload --bind 0.0.0.0:8000 --timeout 240"
     ports:
