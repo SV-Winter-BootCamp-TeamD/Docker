@@ -217,6 +217,20 @@ services:
       - elasticsearch
     restart: unless-stopped
 
+  filebeat:
+    build:
+      context: elk/filebeat
+      args:
+        ELASTIC_VERSION: 8.5.2
+    entrypoint: "filebeat -e -strict.perms=false"
+    volumes:
+      - ./elk/filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - ./nginx/log:/var/log/nginx # nginx log path (require same option on nginx container)
+    depends_on:
+      - logstash
+      - elasticsearch
+      - kibana
+
 networks:
   teamd:
     driver: bridge
